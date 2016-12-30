@@ -26,6 +26,20 @@ public class TranslateModule extends AIModule {
         translator = Translator.getInstance();
 
         Intent translate = new Intent("Translate")
+                .addTemplate("can you translate something?")
+                .addTemplate("can you help me translate something?")
+                .addTemplate(new IntentTemplate()
+                        .addPart("how do you translate it to ")
+                        .addPart(new IntentTemplate.TemplatePart("dutch")
+                                .withAlias("target")
+                                .withMeta("@sys.language")
+                                .setUserDefined(true)))
+                .addTemplate(new IntentTemplate()
+                        .addPart("how do you say it in ")
+                        .addPart(new IntentTemplate.TemplatePart("dutch")
+                                .withAlias("target")
+                                .withMeta("@sys.language")
+                                .setUserDefined(true)))
                 .addTemplate(new IntentTemplate()
                         .addPart("translate \"")
                         .addPart(new IntentTemplate.TemplatePart("Ik ben maxim")
@@ -61,6 +75,30 @@ public class TranslateModule extends AIModule {
                                 .withAlias("text")
                                 .setUserDefined(true))
                         .addPart("\" in ")
+                        .addPart(new IntentTemplate.TemplatePart("english")
+                                .withAlias("target")
+                                .withMeta("@sys.language")
+                                .setUserDefined(true))
+                        .addPart("?"))
+                .addTemplate(new IntentTemplate()
+                        .addPart("how do you say \"")
+                        .addPart(new IntentTemplate.TemplatePart("Greetings")
+                                .withMeta("@sys.any")
+                                .withAlias("text")
+                                .setUserDefined(true))
+                        .addPart("\" in ")
+                        .addPart(new IntentTemplate.TemplatePart("english")
+                                .withAlias("target")
+                                .withMeta("@sys.language")
+                                .setUserDefined(true))
+                        .addPart("?"))
+                .addTemplate(new IntentTemplate()
+                        .addPart("how do you say \"")
+                        .addPart(new IntentTemplate.TemplatePart("Greetings")
+                                .withMeta("@sys.any")
+                                .withAlias("text")
+                                .setUserDefined(true))
+                        .addPart("\" to ")
                         .addPart(new IntentTemplate.TemplatePart("english")
                                 .withAlias("target")
                                 .withMeta("@sys.language")
@@ -161,11 +199,11 @@ public class TranslateModule extends AIModule {
                                 .addPrompt("To what language should I translate?")
                                 .addPrompt("What is the language I have to translate to?"))
                         .addMessage(new IntentResponse.TextResponse()
-                                .addSpeechText("It is translated like: $translation")
-                                .addSpeechText("\"$text\" is translated to \"$translation\" in $target")
-                                .addSpeechText("\"$text\" is translated to \"$translation\"")
-                                .addSpeechText("\"$translation\"")
-                                .addSpeechText("$translation"))
+                                .addSpeechText("It is translated like: {{translation}}")
+                                .addSpeechText("\"{{text}}\" is translated to \"{{translation}}\" in {{target}}")
+                                .addSpeechText("\"{{text}}\" is translated to \"{{translation}}\"")
+                                .addSpeechText("\"{{translation}}\"")
+                                .addSpeechText("{{translation}}"))
                         .addMessage(new IntentResponse.TextResponse()
                                 .addSpeechText("I don't know that language :S")
                                 .addSpeechText("I can't find the language you want to translate to")
@@ -173,8 +211,10 @@ public class TranslateModule extends AIModule {
 
         try {
             // Upload the intents
-            if (!QAPluginAPI.uploadIntent(translate)) {
-                warning("Unable to upload intent!");
+            if (QAPluginAPI.findIntentByName(translate.getName()) == null) {
+                if (!QAPluginAPI.uploadIntent(translate)) {
+                    warning("Unable to upload intent!");
+                }
             }
         } catch (FeatureNotEnabled ex) {
             severe("You do not have a developer access token in your QAPlugin config!");
@@ -182,8 +222,6 @@ public class TranslateModule extends AIModule {
     }
 
     public String getResponse(AIQuestionEvent event) {
-        Player player = event.getPlayer();
-
         Map<String, String> params = event.getParameters();
         if (!params.containsKey("text")) {
             return event.getDefaultResponse();
@@ -193,24 +231,28 @@ public class TranslateModule extends AIModule {
             return event.getDefaultResponse();
         }
 
-        String sourceLanguage = "auto";
+        Locale sourceLanguage = null;
         if (params.containsKey("source")) {
             sourceLanguage = toCode(params.get("source"));
         }
-        String targetLanguage = toCode(params.get("target"));
-        if (targetLanguage.equalsIgnoreCase("")) {
-
+        Locale targetLanguage = toCode(params.get("target"));
+        if (targetLanguage == null) {
+            // Error
+            return ((IntentResponse.TextResponse) event.getDefaultResponses().get(1)).getSpeechTexts().get(0);
         }
 
         String text = params.get("text");
-        if (text.startsWith("\"") && text.endsWith("\"")){
-            text = text.substring(1,text.length() - 1);
+        if (text.startsWith("\"") && text.endsWith("\"")) {
+            text = text.substring(1, text.length() - 1);
         }
-        if (text.startsWith("\'") && text.endsWith("\'")){
-            text = text.substring(1,text.length() - 1);
+        if (text.startsWith("\'") && text.endsWith("\'")) {
+            text = text.substring(1, text.length() - 1);
         }
-        String translation = translator.translate(text, sourceLanguage, targetLanguage);
-        return event.getDefaultResponse().replace("$translation", translation);
+        String translation = translator.translate(text, sourceLanguage == null ? "" : sourceLanguage.getLanguage(), targetLanguage.getLanguage());
+        return ((IntentResponse.TextResponse) event.getDefaultResponses().get(0)).getSpeechTexts().get(0)
+                .replace("{translation}", translation)
+                .replace("{text}", text)
+                .replace("{target}", targetLanguage.getDisplayLanguage());
     }
 
     /**
@@ -219,18 +261,18 @@ public class TranslateModule extends AIModule {
      * @param name name
      * @return
      */
-    public String toCode(String name) {
+    public Locale toCode(String name) {
         for (Locale locale : Locale.getAvailableLocales()) {
             if (name.equalsIgnoreCase(locale.getDisplayLanguage())) {
-                return locale.getLanguage();
+                return locale;
             }
             if (name.equalsIgnoreCase(locale.getCountry())) {
-                return locale.getLanguage();
+                return locale;
             }
             if (name.equalsIgnoreCase(locale.getLanguage())) {
-                return locale.getLanguage();
+                return locale;
             }
         }
-        return "";
+        return null;
     }
 }
