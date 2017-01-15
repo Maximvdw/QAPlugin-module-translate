@@ -7,9 +7,9 @@ import be.maximvdw.qaplugin.api.ai.Context;
 import be.maximvdw.qaplugin.api.ai.Intent;
 import be.maximvdw.qaplugin.api.ai.IntentResponse;
 import be.maximvdw.qaplugin.api.ai.IntentTemplate;
+import be.maximvdw.qaplugin.api.annotations.*;
 import be.maximvdw.qaplugin.api.exceptions.FeatureNotEnabled;
 import be.maximvdw.qaplugin.modules.google.Translator;
-import org.bukkit.entity.Player;
 
 import java.util.Locale;
 import java.util.Map;
@@ -18,11 +18,14 @@ import java.util.Map;
  * TranslateModule
  * Created by maxim on 29-Dec-16.
  */
+@ModuleName("Translate")
+@ModuleAuthor("Maximvdw")
+@ModuleVersion("1.1.0")
+@ModuleDescription("Ask the assistant to translate something.")
 public class TranslateModule extends AIModule {
     private Translator translator = null;
 
     public TranslateModule() {
-        super("translate", "Maximvdw", "Translate text to another language");
         translator = Translator.getInstance();
 
         Intent translate = new Intent("Translate")
